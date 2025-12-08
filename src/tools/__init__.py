@@ -1,1 +1,1 @@
-from .weather import weather_forecast
+from .weather import register as register_weather
