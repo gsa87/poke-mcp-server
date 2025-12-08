@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 import os
 from fastmcp import FastMCP
+from tools.weather import weather_forecast
 
-mcp = FastMCP("Sample MCP Server")
+mcp = FastMCP("poke-mcp-server")
+mcp.register(weather_forecast)
 
-@mcp.tool(description="Greet a user by name with a welcome message from the MCP server")
+@mcp.tool(description="Greet a user by name with a welcome message from his MCP server")
 def greet(name: str) -> str:
     return f"Hello, {name}! Welcome to our sample MCP server running on Heroku!"
 
 @mcp.tool(description="Get information about the MCP server including name, version, environment, and Python version")
 def get_server_info() -> dict:
     return {
-        "server_name": "Sample MCP Server",
+        "server_name": "Custom MCP Server",
         "version": "1.0.0",
         "environment": os.environ.get("ENVIRONMENT", "development"),
         "python_version": os.sys.version.split()[0]
