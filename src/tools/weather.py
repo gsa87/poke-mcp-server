@@ -1,7 +1,7 @@
 from fastmcp import FastMCP
 
 # NOTE: The MCP instance will be passed in during registration
-def register(mcp: FastMCP):
+def register_weather(mcp: FastMCP):
     @mcp.tool
     def weather_forecast(latitude: float, longitude: float):
         """
