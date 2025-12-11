@@ -1,0 +1,17 @@
+name: Keep Render Server Alive
+
+on:
+  schedule:
+    # Run every 14 minutes to beat the 15-minute timeout
+    - cron: '*/14 * * * *'
+  workflow_dispatch: # Allows you to click a button to run it manually if needed
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake up the server
+        run: |
+          # Replace this with your REAL Render URL
+          curl -I https://fastmcp-server-2pwy.onrender.com
+          echo "Ping sent to server"
