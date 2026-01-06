@@ -6,7 +6,7 @@ from fastmcp import FastMCP
 
 def register_obsidian(mcp: FastMCP):
     """
-    Registers Obsidian tools using explicit mcp.add_tool() to avoid decorator issues.
+    Registers Obsidian tools.
     """
     
     # -- Shared Helpers --
@@ -34,8 +34,33 @@ def register_obsidian(mcp: FastMCP):
             print(f"GitHub API Error: {e}")
             return None
 
-    # -- Tool Functions (Defined as normal Python functions) --
+    # -- Internal Logic (Raw Functions) --
+    # We define these separately so they can call each other without 
+    # triggering the 'FunctionTool is not callable' error.
 
+    def _read_note_logic(filename: str) -> str:
+        if not filename.endswith(".md"):
+            filename += ".md"
+            
+        token, repo = get_github_config()
+        if not token: return "Error: Obsidian configuration missing."
+
+        try:
+            data = github_request(filename)
+            if not data:
+                return f"Error: Note '{filename}' not found in repository."
+            
+            if "content" not in data:
+                 return "Error: File content too large or unavailable via API."
+
+            content = base64.b64decode(data["content"]).decode("utf-8")
+            return content
+        except Exception as e:
+            return f"Error reading note: {str(e)}"
+
+    # -- Tool Definitions (Decorated) --
+
+    @mcp.tool
     def obsidian_search_notes(query: str) -> str:
         """
         Search for notes in your GitHub-synced Obsidian vault.
@@ -67,29 +92,15 @@ def register_obsidian(mcp: FastMCP):
         except Exception as e:
             return f"Error searching GitHub: {str(e)}"
 
+    @mcp.tool
     def obsidian_read_note(filename: str) -> str:
         """
         Read the content of a specific note from GitHub.
         """
-        if not filename.endswith(".md"):
-            filename += ".md"
-            
-        token, repo = get_github_config()
-        if not token: return "Error: Obsidian configuration missing."
+        # Call the internal logic
+        return _read_note_logic(filename)
 
-        try:
-            data = github_request(filename)
-            if not data:
-                return f"Error: Note '{filename}' not found in repository."
-            
-            if "content" not in data:
-                 return "Error: File content too large or unavailable via API."
-
-            content = base64.b64decode(data["content"]).decode("utf-8")
-            return content
-        except Exception as e:
-            return f"Error reading note: {str(e)}"
-
+    @mcp.tool
     def obsidian_get_daily_note(date: str = None) -> str:
         """
         Get the content of a Daily Note from GitHub.
@@ -98,8 +109,10 @@ def register_obsidian(mcp: FastMCP):
             date = datetime.datetime.now().strftime("%Y-%m-%d")
             
         filename = f"{date}.md" 
-        return obsidian_read_note(filename)
+        # CRITICAL FIX: Call the internal logic, NOT the decorated tool!
+        return _read_note_logic(filename)
 
+    @mcp.tool
     def obsidian_append_todo(text: str, date: str = None) -> str:
         """
         Append a To-Do to a Daily Note via GitHub API.
@@ -135,10 +148,3 @@ def register_obsidian(mcp: FastMCP):
             return f"Successfully added to-do to {date}"
         except Exception as e:
             return f"Error updating file on GitHub: {str(e)}"
-
-    # -- Explicit Registration --
-    # This bypasses the decorator issue entirely
-    mcp.add_tool(obsidian_search_notes)
-    mcp.add_tool(obsidian_read_note)
-    mcp.add_tool(obsidian_get_daily_note)
-    mcp.add_tool(obsidian_append_todo)
