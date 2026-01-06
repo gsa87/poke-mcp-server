@@ -3,23 +3,26 @@ import os
 from fastmcp import FastMCP
 from tools import register_weather, register_ns, register_airlabs, register_obsidian
 
+# Initialize the MCP Server
 mcp = FastMCP("poke-mcp-server")
+
+# Register all tools
 register_weather(mcp)
 register_ns(mcp)
 register_airlabs(mcp)
 register_obsidian(mcp)
 
-@mcp.tool(description="Greet a user by name with a welcome message from his MCP server")
+@mcp.tool(description="Greet a user by name")
 def greet(name: str) -> str:
-    return f"Hello, {name}! Welcome to our sample MCP server running on Heroku!"
+    return f"Hello, {name}! Welcome to the Mega MCP server!"
 
-@mcp.tool(description="Get information about the MCP server including name, version, environment, and Python version")
+@mcp.tool(description="Get server status")
 def get_server_info() -> dict:
     return {
-        "server_name": "Custom MCP Server",
-        "version": "1.0.0",
-        "environment": os.environ.get("ENVIRONMENT", "development"),
-        "python_version": os.sys.version.split()[0]
+        "server_name": "Poke Custom MCP",
+        "version": "1.2.0",
+        "status": "online",
+        "modules": ["Weather", "NS", "AirLabs", "Obsidian"]
     }
 
 if __name__ == "__main__":
