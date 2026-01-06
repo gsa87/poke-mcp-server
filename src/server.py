@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 import os
 from fastmcp import FastMCP
-from tools import register_weather, register_ns, register_airlabs
+from tools import register_weather, register_ns, register_airlabs, register_obsidian
 
 mcp = FastMCP("poke-mcp-server")
 register_weather(mcp)
 register_ns(mcp)
 register_airlabs(mcp)
+register_obsidian(mcp)
 
 @mcp.tool(description="Greet a user by name with a welcome message from his MCP server")
 def greet(name: str) -> str:
