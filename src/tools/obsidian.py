@@ -6,27 +6,19 @@ from fastmcp import FastMCP
 
 def register_obsidian(mcp: FastMCP):
     """
-    Registers Obsidian tools that read from a private GitHub Repository.
-    This allows the AI to access your notes from the cloud (Render) without your laptop being on.
+    Registers Obsidian tools using explicit mcp.add_tool() to avoid decorator issues.
     """
     
+    # -- Shared Helpers --
     def get_github_config():
         token = os.environ.get("GITHUB_PERSONAL_TOKEN")
-        repo = os.environ.get("OBSIDIAN_GITHUB_REPO") # Format: "username/repo-name"
-        
-        if not token or not repo:
-            # We log a warning but don't crash immediately, to allow other tools to work
-            print("WARNING: Obsidian env vars missing. Obsidian tools will fail if called.")
-            return None, None
-            
+        repo = os.environ.get("OBSIDIAN_GITHUB_REPO") 
         return token, repo
 
     def github_request(path, params=None):
         token, repo = get_github_config()
-        if not token:
+        if not token or not repo:
             return None
-            
-        # GitHub Content API
         url = f"https://api.github.com/repos/{repo}/contents/{path}"
         headers = {
             "Authorization": f"Bearer {token}",
@@ -42,91 +34,73 @@ def register_obsidian(mcp: FastMCP):
             print(f"GitHub API Error: {e}")
             return None
 
-    @mcp.tool
-    def obsidian_search_notes(query: str):
+    # -- Tool Functions (Defined as normal Python functions) --
+
+    def obsidian_search_notes(query: str) -> str:
         """
         Search for notes in your GitHub-synced Obsidian vault.
-        Uses GitHub's code search API to find matching files.
+        Uses GitHub's code search API.
         """
         token, repo = get_github_config()
-        if not token: return "Error: Obsidian configuration missing."
+        if not token or not repo: 
+            return "Error: Obsidian configuration (GITHUB_PERSONAL_TOKEN or OBSIDIAN_GITHUB_REPO) missing."
         
-        # GitHub Code Search API is different from Contents API
         search_url = "https://api.github.com/search/code"
         headers = {"Authorization": f"Bearer {token}"}
-        
-        # Construct search query: "text repo:user/repo extension:md"
         q = f"{query} repo:{repo} extension:md"
         
         try:
             response = requests.get(search_url, headers=headers, params={"q": q}, timeout=10)
             if response.status_code == 403:
-                return "Error: GitHub API rate limit exceeded or invalid token permissions."
-                
+                return "Error: GitHub API rate limit exceeded or invalid token."
+            
             response.raise_for_status()
             data = response.json()
-            
             items = data.get("items", [])
+            
             if not items:
                 return "No notes found matching that text."
             
-            # Return list of filenames/paths
-            results = [item["path"] for item in items[:15]]
-            return results
+            # Return list of filenames
+            return [item["path"] for item in items[:15]]
             
         except Exception as e:
             return f"Error searching GitHub: {str(e)}"
 
-    @mcp.tool
-    def obsidian_read_note(filename: str):
+    def obsidian_read_note(filename: str) -> str:
         """
         Read the content of a specific note from GitHub.
-        
-        Args:
-            filename: The path to the file (e.g., "Daily Notes/2024-01-01.md").
         """
-        # Ensure extension
         if not filename.endswith(".md"):
             filename += ".md"
             
+        token, repo = get_github_config()
+        if not token: return "Error: Obsidian configuration missing."
+
         try:
             data = github_request(filename)
             if not data:
                 return f"Error: Note '{filename}' not found in repository."
             
-            # GitHub API returns content base64 encoded
-            # 'content' field might be missing if file is too large ( > 1MB), then we need 'blob' API.
-            # But for notes, usually 'content' is there.
             if "content" not in data:
-                 return "Error: File content not available directly (too large?)."
+                 return "Error: File content too large or unavailable via API."
 
             content = base64.b64decode(data["content"]).decode("utf-8")
             return content
-            
         except Exception as e:
-            return f"Error reading note from GitHub: {str(e)}"
+            return f"Error reading note: {str(e)}"
 
-    @mcp.tool
-    def obsidian_get_daily_note(date: str = None):
+    def obsidian_get_daily_note(date: str = None) -> str:
         """
         Get the content of a Daily Note from GitHub.
-        
-        Args:
-            date: (Optional) Date in YYYY-MM-DD format. Defaults to today.
         """
         if not date:
             date = datetime.datetime.now().strftime("%Y-%m-%d")
             
-        # IMPORTANT: Adjust this path to match your actual Obsidian folder structure!
-        # Assuming format "YYYY-MM-DD.md" in root or specific folder
-        # If standard Obsidian Daily Notes: usually in root or a folder.
-        # Let's try root first, or you can edit this path.
         filename = f"{date}.md" 
-        
         return obsidian_read_note(filename)
 
-    @mcp.tool
-    def obsidian_append_todo(text: str, date: str = None):
+    def obsidian_append_todo(text: str, date: str = None) -> str:
         """
         Append a To-Do to a Daily Note via GitHub API.
         """
@@ -136,25 +110,18 @@ def register_obsidian(mcp: FastMCP):
         if not date:
             date = datetime.datetime.now().strftime("%Y-%m-%d")
             
-        # IMPORTANT: Adjust this path to match your folder structure
         filename = f"{date}.md"
         
-        # 1. Get current file sha (needed for update)
         file_data = github_request(filename)
         if not file_data:
             return f"Error: Daily note {filename} does not exist. Please create it locally first."
             
         sha = file_data["sha"]
-        if "content" not in file_data:
-             return "Error: Cannot read file to append (too large?)."
-
         current_content = base64.b64decode(file_data["content"]).decode("utf-8")
         
-        # 2. Append text
         new_content = current_content + f"\n- [ ] {text}"
         encoded_content = base64.b64encode(new_content.encode("utf-8")).decode("utf-8")
         
-        # 3. Push update
         url = f"https://api.github.com/repos/{repo}/contents/{filename}"
         headers = {"Authorization": f"Bearer {token}"}
         payload = {
@@ -168,3 +135,10 @@ def register_obsidian(mcp: FastMCP):
             return f"Successfully added to-do to {date}"
         except Exception as e:
             return f"Error updating file on GitHub: {str(e)}"
+
+    # -- Explicit Registration --
+    # This bypasses the decorator issue entirely
+    mcp.add_tool(obsidian_search_notes)
+    mcp.add_tool(obsidian_read_note)
+    mcp.add_tool(obsidian_get_daily_note)
+    mcp.add_tool(obsidian_append_todo)
